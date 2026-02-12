@@ -44,7 +44,7 @@ def _load_products_file(products_file: Path) -> List[ProductInput]:
         if not isinstance(item, dict):
             raise RuntimeError(f"Product at index {idx} must be an object")
 
-        article_number = str(item.get("article_number", "")).strip()
+        article_number = str(item.get("article_number", "")).strip().upper()
         if not article_number:
             raise RuntimeError(f"Product at index {idx} missing article_number")
 
@@ -132,32 +132,40 @@ def cmd_generate(args: argparse.Namespace) -> int:
     ensure_runtime_directories(settings)
     init_db(settings.newsletter_db_url)
 
-    template_path = resolve_template(
-        template_dir=settings.newsletter_template_dir,
-        template_name=args.template,
-        language=args.language,
-    )
-    validate_template(template_path)
-
     products = _load_products_file(Path(args.products_file))
-    output_dir = Path(args.output_dir) if args.output_dir else settings.newsletter_output_dir
+    output_dir = settings.newsletter_output_dir
+    languages = ["de", "en"] if args.language == "both" else [args.language]
 
-    with get_session(settings.newsletter_db_url) as db:
-        result = generate_newsletter(
-            db=db,
-            template_path=template_path,
+    template_paths = {}
+    for language in languages:
+        template_path = resolve_template(
+            template_dir=settings.newsletter_template_dir,
             template_name=args.template,
-            language=args.language,
-            products=products,
-            validity_date=args.validity_date,
-            generate_pdf=args.pdf,
-            output_dir=output_dir,
+            language=language,
         )
+        validate_template(template_path)
+        template_paths[language] = template_path
 
-    print(f"Run ID: {result.run_id}")
-    print(f"HTML: {result.html_path}")
-    if result.pdf_path:
-        print(f"PDF: {result.pdf_path}")
+    results = []
+    with get_session(settings.newsletter_db_url) as db:
+        for language in languages:
+            result = generate_newsletter(
+                db=db,
+                template_path=template_paths[language],
+                template_name=args.template,
+                language=language,
+                products=products,
+                validity_date=args.validity_date,
+                generate_pdf=args.pdf,
+                output_dir=output_dir,
+            )
+            results.append((language, result))
+
+    for language, result in results:
+        print(f"[{language}] Run ID: {result.run_id}")
+        print(f"[{language}] HTML: {result.html_path}")
+        if result.pdf_path:
+            print(f"[{language}] PDF: {result.pdf_path}")
     return 0
 
 
@@ -237,11 +245,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     gen = sub.add_parser("generate", help="Generate newsletter")
     gen.add_argument("--template", required=True, help="Template name without language suffix")
-    gen.add_argument("--language", required=True, choices=["de", "en"], help="Template language")
+    gen.add_argument(
+        "--language",
+        required=False,
+        choices=["de", "en", "both"],
+        default="both",
+        help="Template language (default: both)",
+    )
     gen.add_argument("--products-file", required=True, help="Path to products JSON file")
-    gen.add_argument("--validity-date", required=False, help="Validity date YYYY-MM-DD")
+    gen.add_argument(
+        "--validity-date",
+        required=False,
+        help="Validity date (YYYY-MM-DD or DD-MM-YYYY)",
+    )
     gen.add_argument("--pdf", action="store_true", help="Generate PDF")
-    gen.add_argument("--output-dir", required=False, help="Override output directory")
 
     runs = sub.add_parser("runs", help="Run metadata operations")
     runs_sub = runs.add_subparsers(dest="runs_command", required=True)

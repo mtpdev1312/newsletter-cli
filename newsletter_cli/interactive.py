@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .config import Settings, ensure_runtime_directories, load_settings
@@ -14,7 +14,7 @@ from .db import get_session, init_db
 from .generator import ProductInput, generate_newsletter
 from .models import MTPProductCache
 from .template_assets import install_builtin_templates
-from .templates import TemplateInfo, list_templates, resolve_template, validate_template
+from .templates import list_templates, resolve_template, validate_template
 
 RICH_IMPORT_ERROR: Exception | None = None
 
@@ -29,18 +29,18 @@ except ImportError as exc:  # pragma: no cover
 
 @dataclass(frozen=True)
 class WizardConfig:
-    template: TemplateInfo
+    template_name: str
     products: List[ProductInput]
     validity_date: Optional[str]
     generate_pdf: bool
-    output_dir: Path
 
 
 def _lookup_product(db: Session, article_number: str) -> Optional[MTPProductCache]:
-    return db.query(MTPProductCache).filter(MTPProductCache.article_number == article_number).first()
+    normalized = article_number.strip().upper()
+    return db.query(MTPProductCache).filter(func.upper(MTPProductCache.article_number) == normalized).first()
 
 
-def _select_template(console: Console, settings: Settings) -> TemplateInfo:
+def _select_template(console: Console, settings: Settings) -> str:
     templates = list_templates(settings.newsletter_template_dir)
 
     if not templates:
@@ -62,21 +62,27 @@ def _select_template(console: Console, settings: Settings) -> TemplateInfo:
             "Use 'newsletter templates install' or add files named <name>_<de|en>.html"
         )
 
-    table = Table(title="Available Templates")
+    grouped: Dict[str, set[str]] = {}
+    for tmpl in templates:
+        grouped.setdefault(tmpl.name, set()).add(tmpl.language)
+
+    names = sorted(name for name, langs in grouped.items() if {"de", "en"}.issubset(langs))
+    if not names:
+        raise RuntimeError("No template pair found with both _de and _en variants.")
+
+    table = Table(title="Available Template Pairs")
     table.add_column("#", justify="right")
     table.add_column("Template")
-    table.add_column("Language")
-    table.add_column("Path")
 
-    for idx, tmpl in enumerate(templates, start=1):
-        table.add_row(str(idx), tmpl.name, tmpl.language, str(tmpl.path))
+    for idx, name in enumerate(names, start=1):
+        table.add_row(str(idx), name)
 
     console.print(table)
     index = IntPrompt.ask("Select template", default=1)
-    if index < 1 or index > len(templates):
+    if index < 1 or index > len(names):
         raise RuntimeError(f"Template selection out of range: {index}")
 
-    return templates[index - 1]
+    return names[index - 1]
 
 
 def _collect_products(console: Console, db: Session) -> List[ProductInput]:
@@ -85,7 +91,7 @@ def _collect_products(console: Console, db: Session) -> List[ProductInput]:
     console.print(Panel("Add one or more products (blank article number to finish).", title="Products"))
 
     while True:
-        article_number = Prompt.ask("Article number (e.g. MTP102004)", default="").strip()
+        article_number = Prompt.ask("Article number (e.g. MTP102004)", default="").strip().upper()
         if not article_number:
             if products:
                 break
@@ -115,48 +121,44 @@ def _collect_products(console: Console, db: Session) -> List[ProductInput]:
 
 
 def _ask_validity_date(console: Console) -> Optional[str]:
-    value = Prompt.ask("Validity date YYYY-MM-DD (optional)", default="").strip()
+    value = Prompt.ask("Validity date YYYY-MM-DD or DD-MM-YYYY (optional)", default="").strip()
     if not value:
         return None
 
-    try:
-        datetime.strptime(value, "%Y-%m-%d")
-    except ValueError as exc:
-        raise RuntimeError("Validity date must use format YYYY-MM-DD") from exc
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d.%m.%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
 
-    return value
+    raise RuntimeError("Validity date must use YYYY-MM-DD or DD-MM-YYYY")
 
 
 def _collect_wizard_config(console: Console, settings: Settings, db: Session) -> WizardConfig:
-    template = _select_template(console, settings)
+    template_name = _select_template(console, settings)
     products = _collect_products(console, db)
     validity_date = _ask_validity_date(console)
     generate_pdf = Confirm.ask("Generate PDF too?", default=True)
 
-    output_default = str(settings.newsletter_output_dir)
-    output_dir_raw = Prompt.ask("Output directory", default=output_default).strip()
-    output_dir = Path(output_dir_raw)
-
     summary = Table(title="Summary")
     summary.add_column("Field")
     summary.add_column("Value")
-    summary.add_row("Template", template.name)
-    summary.add_row("Language", template.language)
+    summary.add_row("Template", template_name)
+    summary.add_row("Languages", "de, en")
     summary.add_row("Products", str(len(products)))
     summary.add_row("Validity date", validity_date or "-")
     summary.add_row("Generate PDF", "yes" if generate_pdf else "no")
-    summary.add_row("Output", str(output_dir))
+    summary.add_row("Output", str(settings.newsletter_output_dir))
     console.print(summary)
 
     if not Confirm.ask("Generate newsletter now?", default=True):
         raise RuntimeError("Cancelled by user")
 
     return WizardConfig(
-        template=template,
+        template_name=template_name,
         products=products,
         validity_date=validity_date,
         generate_pdf=generate_pdf,
-        output_dir=output_dir,
     )
 
 
@@ -175,31 +177,35 @@ def run_interactive_wizard() -> int:
 
     with get_session(settings.newsletter_db_url) as db:
         config = _collect_wizard_config(console, settings, db)
+        results = []
+        for language in ("de", "en"):
+            template_path = resolve_template(
+                template_dir=settings.newsletter_template_dir,
+                template_name=config.template_name,
+                language=language,
+            )
+            validate_template(template_path)
 
-        template_path = resolve_template(
-            template_dir=settings.newsletter_template_dir,
-            template_name=config.template.name,
-            language=config.template.language,
-        )
-        validate_template(template_path)
-
-        result = generate_newsletter(
-            db=db,
-            template_path=template_path,
-            template_name=config.template.name,
-            language=config.template.language,
-            products=config.products,
-            validity_date=config.validity_date,
-            generate_pdf=config.generate_pdf,
-            output_dir=config.output_dir,
-        )
+            result = generate_newsletter(
+                db=db,
+                template_path=template_path,
+                template_name=config.template_name,
+                language=language,
+                products=config.products,
+                validity_date=config.validity_date,
+                generate_pdf=config.generate_pdf,
+                output_dir=settings.newsletter_output_dir,
+            )
+            results.append((language, result))
 
     result_table = Table(title="Done")
+    result_table.add_column("Language")
     result_table.add_column("Output")
     result_table.add_column("Path")
-    result_table.add_row("Run ID", str(result.run_id))
-    result_table.add_row("HTML", str(result.html_path))
-    result_table.add_row("PDF", str(result.pdf_path) if result.pdf_path else "-")
+    for language, result in results:
+        result_table.add_row(language, "Run ID", str(result.run_id))
+        result_table.add_row(language, "HTML", str(result.html_path))
+        result_table.add_row(language, "PDF", str(result.pdf_path) if result.pdf_path else "-")
     console.print(result_table)
 
     return 0

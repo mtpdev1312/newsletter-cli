@@ -20,7 +20,7 @@ def test_generate_html_and_store_run(tmp_path: Path):
 
     template = template_dir / "basic_de.html"
     template.write_text(
-        "<html><body>{{ total_products }} {{ products[0].ArticleNumber }} {{ formatted_total_amount }}</body></html>",
+        "<html><body>{{ total_products }} {{ products[0].FormattedRetailPriceVat }} {{ products[0].ArticleNumber }} {{ formatted_total_amount }}</body></html>",
         encoding="utf-8",
     )
 
@@ -42,8 +42,8 @@ def test_generate_html_and_store_run(tmp_path: Path):
         template_path=template,
         template_name="basic",
         language="de",
-        products=[ProductInput(article_number="MTP102004", discount=10, quantity=2)],
-        validity_date="2026-12-31",
+        products=[ProductInput(article_number="mtp102004", discount=10, quantity=2)],
+        validity_date="31-12-2026",
         generate_pdf=False,
         output_dir=output_dir,
     )
@@ -51,10 +51,12 @@ def test_generate_html_and_store_run(tmp_path: Path):
     assert result.run_id > 0
     assert result.html_path.exists()
     assert result.pdf_path is None
+    assert "100,00" in result.html_path.read_text(encoding="utf-8")
 
     run = db.query(NewsletterRun).filter(NewsletterRun.id == result.run_id).first()
     assert run is not None
     assert run.template_name == "basic"
     assert run.language == "de"
+    assert run.validity_date == "2026-12-31"
     assert run.products_count == 1
     db.close()

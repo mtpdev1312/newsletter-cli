@@ -43,6 +43,7 @@
         {% if product.Discount | int > 0 %}
             <strong><span style="color:#FF0000">Einkaufspreis ab {{ product.Quantity }} Stück {{ product.OriginalPrice }}<span style="font-size:24px"> - {{ product.Discount }}%</span> = </span><u><span style="color:#FF0000">{{ product.FormattedPrice }}</span></u></strong><br>
         {% endif %}
+        <strong>UVP {{ product.FormattedRetailPriceVat }} €</strong><br>
         <strong>Best. Nr. {{ product.ArticleNumber }} - <a
                 href="https://shop.mtp-music.de/artikel-details/{{ product.ArticleNumber }}.aspx"
                 target="_blank"

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from jinja2 import Template
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .models import MTPProductCache, NewsletterRun
@@ -60,13 +61,14 @@ def _prepare_products(db: Session, inputs: List[ProductInput], language: str) ->
     selected_products: List[Dict[str, object]] = []
 
     for product_input in inputs:
+        article_number = product_input.article_number.strip().upper()
         cached = (
             db.query(MTPProductCache)
-            .filter(MTPProductCache.article_number == product_input.article_number)
+            .filter(func.upper(MTPProductCache.article_number) == article_number)
             .first()
         )
         if not cached:
-            logger.warning("Article %s not found in cache", product_input.article_number)
+            logger.warning("Article %s not found in cache", article_number)
             continue
 
         price = _select_price(cached)
@@ -93,6 +95,8 @@ def _prepare_products(db: Session, inputs: List[ProductInput], language: str) ->
                 "Price": price,
                 "DiscountedPrice": discounted_price,
                 "FormattedPrice": _format_currency(discounted_price),
+                "RetailPriceVat": float(cached.price_retail_vat or 0.0),
+                "FormattedRetailPriceVat": _format_currency(float(cached.price_retail_vat or 0.0)),
                 "OriginalPrice": _format_currency(price) if product_input.discount > 0 else None,
                 "Discount": product_input.discount,
                 "Quantity": product_input.quantity,
@@ -147,6 +151,22 @@ def _render_html(template_path: Path, products: List[Dict[str, object]], languag
     return template.render(context)
 
 
+def _normalize_validity_date(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d.%m.%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(normalized, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return normalized
+
+
 def _write_pdf(html_content: str, output_path: Path) -> None:
     try:
         import weasyprint
@@ -168,13 +188,14 @@ def generate_newsletter(
     output_dir: Path,
 ) -> GenerateResult:
     output_dir.mkdir(parents=True, exist_ok=True)
+    normalized_validity_date = _normalize_validity_date(validity_date)
 
     selected_products = _prepare_products(db=db, inputs=products, language=language)
     html_content = _render_html(
         template_path=template_path,
         products=selected_products,
         language=language,
-        validity_date=validity_date,
+        validity_date=normalized_validity_date,
     )
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -202,7 +223,7 @@ def generate_newsletter(
         filename=filename,
         template_name=template_name,
         language=language,
-        validity_date=validity_date,
+        validity_date=normalized_validity_date,
         products_count=len(selected_products),
         article_numbers=article_numbers,
         html_path=str(html_path),
