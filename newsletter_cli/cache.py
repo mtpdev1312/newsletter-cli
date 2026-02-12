@@ -56,11 +56,15 @@ def refresh_cache(db: Session, service_url: str, username: str, password: str) -
         raise RuntimeError("Failed to fetch product data from MTP API")
 
     processed = 0
+    seen_articles = set()
     for entry in _iter_entries(feed):
         properties = entry.get("content", {}).get("m:properties", {})
         article_number = _extract_text(properties.get("d:Artikelnummer", "")).strip()
         if not article_number:
             continue
+        if article_number in seen_articles:
+            continue
+        seen_articles.add(article_number)
 
         detail_images = _extract_detail_images(_extract_text(properties.get("d:Detailbilder", "")))
         all_fields = {
