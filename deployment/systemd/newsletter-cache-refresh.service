@@ -1,0 +1,14 @@
+[Unit]
+Description=Newsletter CLI cache refresh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=mtpnews
+Group=mtpnews
+WorkingDirectory=/opt/mtp-newsletter
+EnvironmentFile=/opt/mtp-newsletter/.env
+ExecStart=/opt/mtp-newsletter/venv/bin/newsletter cache refresh
+StandardOutput=append:/opt/mtp-newsletter/logs/cache-refresh.log
+StandardError=append:/opt/mtp-newsletter/logs/cache-refresh-error.log

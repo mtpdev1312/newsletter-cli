@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="de">
+  <head><meta charset="utf-8"><title>Newsletter</title></head>
+  <body>
+    <h1>Newsletter</h1>
+    <p>Generiert am {{ generation_date }} {{ generation_time }}</p>
+    <p>Gueltig bis: {{ formatted_validity_date }}</p>
+    <ul>
+      {% for product in products %}
+      <li>{{ product.ArticleNumber }} - {{ product.Name }} - {{ product.FormattedPrice }} EUR</li>
+      {% endfor %}
+    </ul>
+    <p>Summe: {{ formatted_total_amount }} EUR</p>
+  </body>
+</html>

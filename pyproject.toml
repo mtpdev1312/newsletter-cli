@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mtp-newsletter-cli"
+version = "0.1.0"
+description = "Standalone CLI newsletter generator for MTP suite"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "sqlalchemy>=2.0.25,<3.0.0",
+  "requests>=2.31.0,<3.0.0",
+  "jinja2>=3.1.2,<4.0.0",
+  "xmltodict>=1.0.0,<2.0.0",
+  "python-dotenv>=1.0.0,<2.0.0",
+]
+
+[project.optional-dependencies]
+pdf = [
+  "weasyprint>=61.0,<62.0",
+]
+test = [
+  "pytest>=8.0.0,<9.0.0",
+]
+
+[project.scripts]
+newsletter = "newsletter_cli.cli:main"
+
+[tool.setuptools]
+packages = ["newsletter_cli"]

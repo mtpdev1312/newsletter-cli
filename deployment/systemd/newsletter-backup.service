@@ -1,0 +1,13 @@
+[Unit]
+Description=Newsletter CLI daily backup
+After=network.target
+
+[Service]
+Type=oneshot
+User=mtpnews
+Group=mtpnews
+WorkingDirectory=/opt/mtp-newsletter
+Environment=APP_DIR=/opt/mtp-newsletter
+ExecStart=/opt/mtp-newsletter/backup.sh
+StandardOutput=append:/opt/mtp-newsletter/logs/backup.log
+StandardError=append:/opt/mtp-newsletter/logs/backup-error.log
