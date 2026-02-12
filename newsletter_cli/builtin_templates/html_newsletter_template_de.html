@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newsletter</title>
+</head>
+<body>
+    <style>
+    .price-tag-container {
+        position: relative;
+        display: inline-block; /* To wrap the image tightly */
+    }
+    .discount-tag {
+        position: absolute;
+        top: 15px; /* Keeps it nicely positioned */
+        right: -15px; /* Adjusted to accommodate potentially wider tag */
+        background-color: #FFD700; /* Fallback background */
+        background-image: linear-gradient(to bottom, #FFFACD, #FFD700); /* LemonChiffon to Gold - subtle gradient */
+        color: #2F4F4F; /* DarkSlateGray - for a classic, fancy feel */
+        padding: 10px 20px; /* Adjusted padding for new font size & look */
+        font-size: 18px;   /* Increased font size */
+        line-height: 1.4;  /* Adjusted line height */
+        font-weight: bold;
+        font-family: Georgia, Times, 'Times New Roman', serif; /* More classic/fancy font stack */
+        text-align: center;
+        transform: rotate(10deg);
+        transform-origin: top right;
+        z-index: 10;
+        border-radius: 25px; /* Slightly more rounded for a softer, fancier shape */
+        box-shadow: 3px 3px 7px rgba(0,0,0,0.35); /* Slightly more pronounced shadow */
+    }
+    </style>
+    {% for product in products %}
+    <!-- Product Start -->
+    <div>
+        <span style="font-size:18px"><strong>{{ product.Name }}</strong></span>
+        <br>
+        <br>
+        <div>{{ product.Description }}</div>
+        <br>
+        <br>
+        {% if product.Discount | int > 0 %}
+            <strong><span style="color:#FF0000">Einkaufspreis ab {{ product.Quantity }} Stück {{ product.OriginalPrice }}<span style="font-size:24px"> - {{ product.Discount }}%</span> = </span><u><span style="color:#FF0000">{{ product.FormattedPrice }}</span></u></strong><br>
+        {% endif %}
+        <strong>Best. Nr. {{ product.ArticleNumber }} - <a
+                href="https://shop.mtp-music.de/artikel-details/{{ product.ArticleNumber }}.aspx"
+                target="_blank"
+                style="color: #007C89;text-decoration: underline;">Link zum Shop</a></strong><br>
+        <br>
+        {% if formatted_validity_date %}Gültig bis {{ formatted_validity_date }} oder solange der Vorrat reicht.{% else %}Gültig solange der Vorrat reicht.{% endif %}
+        <br>
+        <br>
+        {% if product.Discount | int > 0 %}
+        <div class="price-tag-container">
+            <div class="discount-tag">-{{ product.Discount }}%<br>Rabatt</div>
+            <img alt="{{ product.Name }}"
+                src="{{ product.ImageUrl }}"
+                width="564"
+                style="max-height: 550px;width: auto;max-width: 950px;border: 0;height: auto;outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;vertical-align: bottom;"
+                class="mcnImage">
+        </div>
+        {% else %}
+            <img alt="{{ product.Name }}"
+                src="{{ product.ImageUrl }}"
+                width="564"
+                style="max-height: 550px;width: auto;max-width: 950px;border: 0;height: auto;outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;vertical-align: bottom;"
+                class="mcnImage">
+        {% endif %}
+    </div>
+    <!-- Product End -->
+    {% endfor %}
+</body>
+</html> 

@@ -62,6 +62,7 @@ systemctl enable newsletter-cache-refresh.timer
 systemctl enable newsletter-backup.timer
 
 sudo -u "${APP_USER}" bash -lc "set -a && source ${APP_DIR}/.env && set +a && ${APP_DIR}/venv/bin/newsletter init"
+sudo -u "${APP_USER}" bash -lc "set -a && source ${APP_DIR}/.env && set +a && ${APP_DIR}/venv/bin/newsletter templates install"
 
 echo "Installation complete"
 echo "Next steps:"

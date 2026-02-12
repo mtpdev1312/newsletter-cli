@@ -3,10 +3,13 @@
 Standalone terminal service for generating newsletters on an always-on server (e.g., Hetzner).
 
 ## Features
+- `newsletter` (interactive wizard)
+- `newsletter wizard`
 - `newsletter init`
 - `newsletter cache refresh`
 - `newsletter templates list`
 - `newsletter templates validate --template <path>`
+- `newsletter templates install [--overwrite]`
 - `newsletter generate --template <name> --language <de|en> --products-file <json> [--validity-date YYYY-MM-DD] [--pdf] [--output-dir <path>]`
 - `newsletter runs list [--limit N]`
 - `newsletter runs show --id <run_id>`
@@ -21,18 +24,21 @@ pip install -e .
 cp .env.example .env
 ```
 
-Create template files in your template dir using this naming format:
-- `<template_name>_de.html`
-- `<template_name>_en.html`
-
 Example:
 ```bash
 newsletter init
+newsletter templates install
 newsletter templates list
 newsletter cache refresh
-newsletter generate --template basic --language de --products-file examples/products.json --pdf
+newsletter
 newsletter runs list --limit 10
 ```
+
+The wizard guides you through:
+- selecting template and language
+- entering MTP article numbers
+- setting discount and quantity per product
+- choosing validity date, PDF output, and output directory
 
 ## Product Input JSON
 ```json

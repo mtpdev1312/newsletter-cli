@@ -28,11 +28,15 @@ sudo -u mtpnews bash -lc 'set -a && source /opt/mtp-newsletter/.env && set +a &&
 ```
 
 ## 5. Copy templates
-Template naming convention:
-- `<name>_de.html`
-- `<name>_en.html`
+Install bundled templates from the repo:
+```bash
+sudo -u mtpnews bash -lc 'set -a && source /opt/mtp-newsletter/.env && set +a && /opt/mtp-newsletter/venv/bin/newsletter templates install'
+```
 
-Copy templates into `/opt/mtp-newsletter/templates`.
+Optional overwrite:
+```bash
+sudo -u mtpnews bash -lc 'set -a && source /opt/mtp-newsletter/.env && set +a && /opt/mtp-newsletter/venv/bin/newsletter templates install --overwrite'
+```
 
 ## 6. Enable timers
 ```bash
@@ -43,6 +47,12 @@ sudo systemctl list-timers | grep newsletter
 ```
 
 ## 7. Generate from SSH
+Interactive wizard (recommended):
+```bash
+sudo -u mtpnews bash -lc 'set -a && source /opt/mtp-newsletter/.env && set +a && /opt/mtp-newsletter/venv/bin/newsletter'
+```
+
+Non-interactive command:
 ```bash
 cat > /tmp/products.json << 'JSON'
 [

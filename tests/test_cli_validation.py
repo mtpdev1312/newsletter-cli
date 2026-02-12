@@ -45,3 +45,18 @@ def test_templates_list_command_runs(tmp_path, monkeypatch):
     (template_dir / "basic_en.html").write_text("<html></html>", encoding="utf-8")
     code = main(["templates", "list"])
     assert code == 0
+
+
+def test_templates_install_command_copies_bundled_templates(tmp_path, monkeypatch):
+    template_dir = tmp_path / "templates"
+    output_dir = tmp_path / "output"
+    template_dir.mkdir()
+    output_dir.mkdir()
+
+    monkeypatch.setenv("NEWSLETTER_DB_URL", f"sqlite:///{tmp_path / 'newsletter.db'}")
+    monkeypatch.setenv("NEWSLETTER_TEMPLATE_DIR", str(template_dir))
+    monkeypatch.setenv("NEWSLETTER_OUTPUT_DIR", str(output_dir))
+
+    code = main(["templates", "install"])
+    assert code == 0
+    assert list(template_dir.glob("*.html"))

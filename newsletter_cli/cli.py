@@ -17,7 +17,9 @@ from .config import (
 )
 from .db import get_session, init_db
 from .generator import ProductInput, generate_newsletter
+from .interactive import run_interactive_wizard
 from .models import NewsletterRun
+from .template_assets import install_builtin_templates
 from .templates import list_templates, resolve_template, validate_template
 
 
@@ -111,6 +113,16 @@ def cmd_templates_validate(template_path: Path) -> int:
 
     validate_template(template_path)
     print(f"Template valid: {template_path}")
+    return 0
+
+
+def cmd_templates_install(overwrite: bool) -> int:
+    settings = load_settings()
+    _configure_logging(settings.newsletter_log_level)
+    ensure_runtime_directories(settings)
+
+    copied = install_builtin_templates(settings.newsletter_template_dir, overwrite=overwrite)
+    print(f"Installed {copied} bundled templates to {settings.newsletter_template_dir}")
     return 0
 
 
@@ -214,6 +226,14 @@ def build_parser() -> argparse.ArgumentParser:
     tmpl_sub.add_parser("list", help="List templates")
     validate_parser = tmpl_sub.add_parser("validate", help="Validate a template file")
     validate_parser.add_argument("--template", required=True, help="Absolute or relative template file path")
+    install_parser = tmpl_sub.add_parser(
+        "install", help="Install bundled templates into NEWSLETTER_TEMPLATE_DIR"
+    )
+    install_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite templates in target directory if they already exist",
+    )
 
     gen = sub.add_parser("generate", help="Generate newsletter")
     gen.add_argument("--template", required=True, help="Template name without language suffix")
@@ -229,13 +249,25 @@ def build_parser() -> argparse.ArgumentParser:
     list_parser.add_argument("--limit", type=int, default=20, help="Max rows to return")
     show_parser = runs_sub.add_parser("show", help="Show run details")
     show_parser.add_argument("--id", type=int, required=True, help="Run ID")
+    sub.add_parser("wizard", help="Start interactive newsletter wizard")
 
     return parser
 
 
 def main(argv: List[str] | None = None) -> int:
+    args_list = argv if argv is not None else sys.argv[1:]
+    if not args_list:
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            try:
+                return run_interactive_wizard()
+            except Exception as exc:
+                print(f"ERROR: {exc}", file=sys.stderr)
+                return 1
+        print("ERROR: no command provided. Use 'newsletter wizard' for interactive mode.", file=sys.stderr)
+        return 1
+
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(args_list)
 
     try:
         if args.command == "init":
@@ -250,6 +282,9 @@ def main(argv: List[str] | None = None) -> int:
         if args.command == "templates" and args.templates_command == "validate":
             return cmd_templates_validate(Path(args.template))
 
+        if args.command == "templates" and args.templates_command == "install":
+            return cmd_templates_install(args.overwrite)
+
         if args.command == "generate":
             return cmd_generate(args)
 
@@ -258,6 +293,9 @@ def main(argv: List[str] | None = None) -> int:
 
         if args.command == "runs" and args.runs_command == "show":
             return cmd_runs_show(args.id)
+
+        if args.command == "wizard":
+            return run_interactive_wizard()
 
         parser.print_help()
         return 1
