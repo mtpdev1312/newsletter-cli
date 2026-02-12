@@ -40,6 +40,32 @@ def _lookup_product(db: Session, article_number: str) -> Optional[MTPProductCach
     return db.query(MTPProductCache).filter(func.upper(MTPProductCache.article_number) == normalized).first()
 
 
+def _suggest_article_numbers(db: Session, article_number: str, limit: int = 5) -> List[str]:
+    normalized = article_number.strip().upper()
+    if not normalized:
+        return []
+
+    prefix_matches = (
+        db.query(MTPProductCache.article_number)
+        .filter(func.upper(MTPProductCache.article_number).like(f"{normalized}%"))
+        .order_by(MTPProductCache.article_number.asc())
+        .limit(limit)
+        .all()
+    )
+    suggestions = [row[0] for row in prefix_matches]
+    if suggestions:
+        return suggestions
+
+    contains_matches = (
+        db.query(MTPProductCache.article_number)
+        .filter(func.upper(MTPProductCache.article_number).like(f"%{normalized}%"))
+        .order_by(MTPProductCache.article_number.asc())
+        .limit(limit)
+        .all()
+    )
+    return [row[0] for row in contains_matches]
+
+
 def _select_template(console: Console, settings: Settings) -> str:
     templates = list_templates(settings.newsletter_template_dir)
 
@@ -99,11 +125,18 @@ def _collect_products(console: Console, db: Session) -> List[ProductInput]:
             continue
 
         cached = _lookup_product(db, article_number)
-        if cached:
-            display_name = cached.name_de or cached.name_en or "Unknown name"
-            console.print(f"Found: [bold]{display_name}[/bold]")
-        else:
-            console.print("Not found in local cache; generation may skip this article.", style="yellow")
+        if not cached:
+            suggestions = _suggest_article_numbers(db, article_number)
+            console.print(
+                f"Article [bold]{article_number}[/bold] not found in local cache. Please enter a valid article number.",
+                style="red",
+            )
+            if suggestions:
+                console.print(f"Suggestions: {', '.join(suggestions)}", style="cyan")
+            continue
+
+        display_name = cached.name_de or cached.name_en or "Unknown name"
+        console.print(f"Found: [bold]{display_name}[/bold]")
 
         discount = IntPrompt.ask("Discount (%)", default=0)
         if discount < 0 or discount > 100:
